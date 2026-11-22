@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ember Court — a duel of suits</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #143626; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #f5ead6; }
+  #table {
+    position: fixed; inset: 0; width: 1280px; height: 720px; margin: auto;
+    background: radial-gradient(ellipse at 50% 30%, #276344 0%, #1d4a33 55%, #143626 100%);
+    transform-origin: center center; overflow: hidden;
+    display: flex; flex-direction: column; padding: 10px 24px 12px; gap: 6px;
+  }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  .side-row { flex: none; height: 52px; }
+  .side-panel {
+    display: flex; align-items: center; gap: 18px; height: 52px; padding: 0 18px;
+    background: rgba(20, 14, 8, 0.55); border: 2px solid #e8b64c; border-radius: 12px;
+  }
+  #warden-row .side-panel { border-color: #8a5fc0; }
+  .side-name { font-family: Georgia, serif; font-size: 22px; letter-spacing: 2px; font-weight: bold; }
+  .side-life { font-size: 24px; color: #ff6b61; letter-spacing: 2px; }
+  .side-life-num { font-size: 20px; font-weight: bold; }
+  .side-ember { font-size: 19px; color: #ffb347; }
+  .side-shield { font-size: 19px; color: #9fd8ff; font-weight: bold; }
+  .side-deck { margin-left: auto; font-size: 16px; color: #c9b48f; }
+  #intent-row { flex: none; height: 28px; display: flex; align-items: center; justify-content: space-between; }
+  #intent { font-family: Georgia, serif; font-style: italic; font-size: 19px; color: #e8d9b0; }
+  #turn-label { font-size: 17px; color: #c9b48f; background: rgba(20, 14, 8, 0.55); padding: 3px 10px; border-radius: 8px; }
+  #mid { flex: 1; position: relative; min-height: 0; }
+  .played-zone { position: absolute; left: 0; width: 880px; height: 126px; display: flex; gap: 10px; align-items: center; }
+  #warden-played { top: 0; }
+  #player-played { bottom: 0; }
+  .played-label { font-size: 15px; color: #c9b48f; width: 120px; flex: none; }
+  #combo {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.9);
+    font-family: Georgia, serif; font-size: 30px; font-weight: bold; letter-spacing: 2px;
+    color: #e8b64c; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.7); white-space: nowrap;
+  }
+  #combo.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #log {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 320px;
+    background: rgba(20, 14, 8, 0.55); border: 1px solid #6b5636; border-radius: 12px;
+    padding: 12px 14px; font-size: 15px; line-height: 1.5; overflow: hidden;
+  }
+  .log-line { margin-bottom: 6px; color: #e8d9b0; }
+  #log .log-line:first-child { color: #fff; font-weight: bold; }
+  #hand-row { flex: none; height: 172px; display: flex; gap: 16px; align-items: flex-end; }
+  #hand { flex: 1; display: flex; gap: 12px; align-items: flex-end; min-width: 0; }
+  #hand-side { flex: none; width: 160px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+  #end-turn {
+    width: 160px; height: 64px;
+    font-family: Georgia, serif; font-size: 22px; font-weight: bold; letter-spacing: 1px;
+    color: #241a12; background: #e8b64c; border: 3px solid #9a7420; border-radius: 14px; cursor: pointer;
+    box-shadow: 0 4px 0 #9a7420; transition: transform 0.08s, box-shadow 0.08s;
+  }
+  #end-turn:hover:not(:disabled) { transform: translateY(-2px); }
+  #end-turn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #9a7420; }
+  #end-turn:disabled { opacity: 0.45; cursor: default; }
+  #hand-hint { text-align: center; font-size: 13px; color: #c9b48f; }
+
+  .card {
+    position: relative; width: 128px; height: 168px; flex: none; border-radius: 12px;
+    background: linear-gradient(160deg, #fdf6e3 0%, #f3e3bd 100%); color: #241a12;
+    border: 3px solid #8a8f98; box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+    cursor: pointer; transition: transform 0.18s ease, box-shadow 0.18s ease;
+    animation: deal-in 0.35s ease backwards;
+  }
+  @keyframes deal-in { from { transform: translateY(30px) rotate(-3deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  #hand .card:hover { transform: translateY(-18px) scale(1.05); box-shadow: 0 14px 22px rgba(0,0,0,0.55); z-index: 5; }
+  .card.disabled { opacity: 0.55; cursor: default; }
+  .card.disabled:hover { transform: none; }
+  .card.suit-flame { border-color: #e2483d; }
+  .card.suit-tide { border-color: #2f7fe0; }
+  .card.suit-leaf { border-color: #3da53d; }
+  .card.suit-stone { border-color: #8a8f98; }
+  .card-cost {
+    position: absolute; top: 6px; left: 6px; width: 30px; height: 30px; border-radius: 50%;
+    background: #ffb347; border: 2px solid #9a7420; color: #241a12;
+    font-size: 18px; font-weight: bold; display: flex; align-items: center; justify-content: center;
+  }
+  .card-glyph { position: absolute; top: 30px; left: 0; right: 0; text-align: center; font-size: 44px; line-height: 1; }
+  .suit-flame .card-glyph { color: #e2483d; }
+  .suit-tide .card-glyph { color: #2f7fe0; }
+  .suit-leaf .card-glyph { color: #3da53d; }
+  .suit-stone .card-glyph { color: #6a6e75; }
+  .card-name { position: absolute; top: 84px; left: 0; right: 0; text-align: center; font-family: Georgia, serif; font-size: 16px; font-weight: bold; }
+  .card-suit { position: absolute; top: 106px; left: 0; right: 0; text-align: center; font-size: 13px; color: #6b5636; }
+  .card-power {
+    position: absolute; bottom: 26px; left: 0; right: 0; text-align: center;
+    font-family: Georgia, serif; font-size: 30px; font-weight: bold;
+  }
+  .card-power::after { content: " power"; font-size: 12px; font-weight: normal; color: #6b5636; }
+  .card-keyword { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: bold; color: #8a5fc0; }
+  .played-card { width: 96px; height: 126px; animation: snap-in 0.25s ease backwards; }
+  .played-card .card-glyph { font-size: 30px; top: 24px; }
+  .played-card .card-name { font-size: 13px; top: 60px; }
+  .played-card .card-suit { display: none; }
+  .played-card .card-power { font-size: 22px; bottom: 18px; }
+  .played-card .card-keyword { font-size: 10px; }
+  .played-card .card-cost { width: 24px; height: 24px; font-size: 14px; }
+  @keyframes snap-in { from { transform: scale(0.7) rotate(6deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(12, 26, 18, 0.88); z-index: 20; text-align: center; padding: 40px;
+  }
+  .overlay.hidden { display: none; }
+  .game-title { font-family: Georgia, serif; font-size: 84px; letter-spacing: 6px; color: #e8b64c; margin: 0; text-shadow: 0 4px 0 #9a7420, 0 8px 24px rgba(0,0,0,0.6); }
+  .game-subtitle { font-family: Georgia, serif; font-style: italic; font-size: 26px; color: #f5ead6; margin: 12px 0 28px; }
+  .suit-row { display: flex; gap: 28px; margin-bottom: 28px; font-size: 20px; }
+  .suit-row span { display: flex; align-items: center; gap: 8px; }
+  .suit-row .glyph { font-size: 30px; }
+  .howto { font-size: 19px; line-height: 1.7; color: #e8d9b0; max-width: 760px; margin: 0 0 30px; }
+  .howto b { color: #fff; }
+  .big-button {
+    font-family: Georgia, serif; font-size: 28px; font-weight: bold; letter-spacing: 2px;
+    color: #241a12; background: #e8b64c; border: 3px solid #9a7420; border-radius: 16px;
+    padding: 16px 44px; cursor: pointer; box-shadow: 0 5px 0 #9a7420; transition: transform 0.08s;
+  }
+  .big-button:hover { transform: translateY(-2px); }
+  .big-button:active { transform: translateY(2px); box-shadow: 0 1px 0 #9a7420; }
+  .begin-hint { margin-top: 18px; font-size: 15px; color: #c9b48f; }
+  #end-title { font-family: Georgia, serif; font-size: 64px; letter-spacing: 4px; margin: 0 0 16px; }
+  #end-screen.win #end-title { color: #e8b64c; text-shadow: 0 4px 0 #9a7420, 0 8px 24px rgba(0,0,0,0.6); }
+  #end-screen.loss #end-title { color: #b9a7d6; }
+  #end-text { font-family: Georgia, serif; font-size: 24px; font-style: italic; color: #f5ead6; max-width: 720px; margin: 0 0 34px; line-height: 1.6; }
+  #confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .confetti { position: absolute; top: -16px; width: 12px; height: 18px; animation: fall linear infinite; }
+  @keyframes fall { to { transform: translateY(760px) rotate(540deg); } }
+</style>
+</head>
+<body>
+<div id="table">
+  <div id="warden-row" class="side-row"></div>
+  <div id="intent-row">
+    <div id="intent">The Warden watches you…</div>
+    <div id="turn-label">Turn 1 · 1 ember</div>
+  </div>
+  <div id="mid">
+    <div id="warden-played" class="played-zone"></div>
+    <div id="combo" class="combo"></div>
+    <div id="log"></div>
+    <div id="player-played" class="played-zone"></div>
+  </div>
+  <div id="player-row" class="side-row"></div>
+  <div id="hand-row">
+    <div id="hand"></div>
+    <div id="hand-side">
+      <button id="end-turn" type="button">END TURN</button>
+      <div id="hand-hint">Click a card to play it · keys 1–5 · Space ends turn</div>
+    </div>
+  </div>
+
+  <div id="title-screen" class="overlay">
+    <h1 class="game-title">EMBER COURT</h1>
+    <p class="game-subtitle">A duel of suits against the Warden</p>
+    <div class="suit-row">
+      <span><span class="glyph" style="color:#e2483d">▲</span> Flame beats Leaf</span>
+      <span><span class="glyph" style="color:#3da53d">❦</span> Leaf beats Stone</span>
+      <span><span class="glyph" style="color:#8a8f98">◆</span> Stone beats Tide</span>
+      <span><span class="glyph" style="color:#2f7fe0">≋</span> Tide beats Flame</span>
+    </div>
+    <p class="howto">You and the Warden hold <b>20 life</b>. Spend <b>ember</b> to play cards — ember grows
+      every turn. A card whose suit beats the Warden's last suit deals <b>+2 power</b>. Chain
+      <b>Draw, Heal, Shield, Pierce</b> and <b>Rally</b> to turn a hand into a winning turn.
+      Read the Warden's intent, then counter it.</p>
+    <button id="begin" class="big-button" type="button">CLICK TO BEGIN</button>
+    <p class="begin-hint">Mouse or keyboard · no network · sound on</p>
+  </div>
+
+  <div id="end-screen" class="overlay hidden">
+    <div id="confetti"></div>
+    <h1 id="end-title"></h1>
+    <p id="end-text"></p>
+    <button id="play-again" class="big-button" type="button">PLAY AGAIN</button>
+  </div>
+</div>
+<p id="status" role="status" aria-live="polite"></p>
+<script>
+  // Scale the fixed 1280x720 table to fill the window.
+  (function scaleTable() {
+    var table = document.getElementById('table');
+    function fit() {
+      var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+      table.style.transform = 'scale(' + s + ')';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+  })();
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
